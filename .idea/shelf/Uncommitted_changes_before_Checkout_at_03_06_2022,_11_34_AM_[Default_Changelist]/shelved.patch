@@ -1,0 +1,183 @@
+Index: app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/TrackingModel.java
+===================================================================
+diff --git a/app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/TrackingModel.java b/app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/MapTrackingModel.java
+rename from app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/TrackingModel.java
+rename to app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/MapTrackingModel.java
+--- a/app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/TrackingModel.java	
++++ b/app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/MapTrackingModel.java	
+@@ -1,7 +1,9 @@
+ package detrack.zaryansgroup.com.detrack.activity.activites.mapTrackingWork;
+ 
+-public class TrackingModel {
++public class MapTrackingModel {
+ 
++
++    int pId;
+     Double lat;
+     Double lng;
+     int userId;
+@@ -10,11 +12,11 @@
+     String Time;
+ 
+ 
+-    public TrackingModel() {
++    public MapTrackingModel() {
+     }
+ 
+-
+-    public TrackingModel(Double lat, Double lng, int userId, int companyId, String date, String time) {
++    public MapTrackingModel(int pId, Double lat, Double lng, int userId, int companyId, String date, String time) {
++        this.pId = pId;
+         this.lat = lat;
+         this.lng = lng;
+         this.userId = userId;
+@@ -23,6 +25,13 @@
+         Time = time;
+     }
+ 
++    public int getpId() {
++        return pId;
++    }
++
++    public void setpId(int pId) {
++        this.pId = pId;
++    }
+ 
+     public Double getLat() {
+         return lat;
+Index: app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/services/ForegroundService.java
+===================================================================
+diff --git a/app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/services/ForegroundService.java b/app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/services/MapForegroundService.java
+rename from app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/services/ForegroundService.java
+rename to app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/services/MapForegroundService.java
+--- a/app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/services/ForegroundService.java	
++++ b/app/src/main/java/detrack/zaryansgroup/com/detrack/activity/activites/mapTrackingWork/services/MapForegroundService.java	
+@@ -12,12 +12,25 @@
+ import androidx.annotation.Nullable;
+ import androidx.core.app.NotificationCompat;
+ 
++import java.util.ArrayList;
++
+ import detrack.zaryansgroup.com.detrack.R;
++import detrack.zaryansgroup.com.detrack.activity.Map.GPSTracker;
++import detrack.zaryansgroup.com.detrack.activity.SQLlite.ZEDTrackDB;
++import detrack.zaryansgroup.com.detrack.activity.SharedPreferences.SharedPrefs;
+ import detrack.zaryansgroup.com.detrack.activity.activites.WelcomeActivity;
++import detrack.zaryansgroup.com.detrack.activity.activites.mapTrackingWork.MapTrackingModel;
++import detrack.zaryansgroup.com.detrack.activity.utilites.Utility;
++import timber.log.Timber;
+ 
+-public class ForegroundService extends Service {
++public class MapForegroundService extends Service {
+ 
++    ZEDTrackDB db;
++    SharedPrefs prefs;
++    ArrayList<MapTrackingModel> mapTrackingModel;
+     public static final String CHANNEL_ID = "ForegroundServiceChannel";
++    int maxId,newGenerateId;
++
+ 
+     @Nullable
+     @Override
+@@ -35,6 +48,28 @@
+     @Override
+     public int onStartCommand(Intent intent, int flags, int startId) {
+ 
++        prefs = new SharedPrefs(getApplicationContext());
++        db = new ZEDTrackDB(getApplicationContext());
++        mapTrackingModel = new ArrayList<>();
++        prefs = new SharedPrefs(getApplicationContext());
++
++        maxId = db.getLastRowId("tblTracking");
++
++        if(!(maxId>0)){
++            Timber.d("Zeero Case is running");
++            maxId = 0;
++        }
++
++        Timber.d("Last Row id is "+maxId);
++
++        newGenerateId = maxId+1;
++
++        Timber.d("newGenerateId id is "+newGenerateId);
++
++
++
++        Timber.d("onStartCommand");
++        monitorLocationData();
+ 
+         String input = intent.getStringExtra("inputExtra");
+         createNotificationChannel();
+@@ -42,7 +77,7 @@
+         PendingIntent pendingIntent = PendingIntent.getActivity(this,
+                 0, notificationIntent, 0);
+         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+-                .setContentTitle("Foreground Service")
++                .setContentTitle("Map Foreground Service")
+                 .setContentText(input)
+                 .setSmallIcon(R.drawable.mapicon)
+                 .setContentIntent(pendingIntent)
+@@ -53,13 +88,55 @@
+     }
+ 
+ 
++    private void monitorLocationData() {
++
++        Timber.d("newGenerateId pid on monitorLocationData is "+ newGenerateId);
++
++                String dbInsertion;
++                MapTrackingModel model = new MapTrackingModel();
++
++        final GPSTracker gps = new GPSTracker(MapForegroundService.this);
++
++        if (gps.canGetLocation()) {
++
++            model.setLat(gps.getLatitude());
++            model.setLng(gps.getLongitude());
++
++        } else {
++            Timber.d("Cant get Location");
++        }
++
++
++        model.setpId(newGenerateId);
++        model.setUserId(prefs.getUserId());
++        model.setCompanyId(Integer.parseInt(prefs.getCompanyID()));
++        model.setDate(Utility.getCurrentDate());
++        model.setTime(Utility.getTime());
++
++
++        Timber.d("pid on model is "+model.getpId());
++
++        dbInsertion = db.storeTrackingData(model);
++
++
++        if (dbInsertion.equalsIgnoreCase("true")) {
++            Timber.d("Data Inserted Successfully");
++            newGenerateId = newGenerateId +1;
++            Timber.d("Id value on success is "+ newGenerateId);
++        } else {
++            Timber.d("Data not inserted Successfully");
++        }
++
++
++    }
++
++
+     @Override
+     public void onDestroy() {
+         super.onDestroy();
+     }
+ 
+ 
+-
+     private void createNotificationChannel() {
+ 
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+@@ -72,6 +149,5 @@
+             manager.createNotificationChannel(serviceChannel);
+         }
+ 
+-
+     }
+ }
